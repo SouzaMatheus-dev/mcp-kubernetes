@@ -42,8 +42,8 @@ O servidor simplesmente não tem como executá-la.
 | Item | Detalhe |
 | --- | --- |
 | .NET | **8+** para global tool · **10+** para `dnx` |
-| Cluster | kubeconfig válido com `get` / `list` / `watch` |
-| Rede | acesso HTTPS à API do Kubernetes |
+| Cluster | **Rancher/API nativa:** kubeconfig com `get` / `list` / `watch` · **Dashboard:** URL do portal + token de leitura no env |
+| Rede | HTTPS até a API nativa **ou** até o Kubernetes Dashboard |
 | Métricas | metrics-server (opcional; só para `uso_recursos_pods`) |
 
 Confira o acesso **antes** de ligar o MCP:
@@ -93,7 +93,7 @@ dotnet dnx McpKubernetes --yes --source https://api.nuget.org/v3/index.json
 ### Versão específica
 
 ```powershell
-dotnet tool install --global McpKubernetes --version 0.1.3
+dotnet tool install --global McpKubernetes --version 0.1.4
 ```
 
 ---
@@ -101,9 +101,124 @@ dotnet tool install --global McpKubernetes --version 0.1.3
 ## Configuração no Gemini CLI
 
 Arquivo do usuário: `%USERPROFILE%\.gemini\settings.json`  
-Ou, no projeto: `.gemini/settings.json`
+Ou, no projeto: `.gemini/settings.json`  
+Credenciais: **somente** em `.gemini/settings.local.json` (gitignored). O pacote não embute token, senha nem URL interna.
 
-### Global tool
+Há **três modos**. Uma entrada MCP por cluster.
+
+### 1) Rancher / API nativa (`K8S_API_MODE=native`)
+
+Usa kubeconfig (o mesmo que o `kubectl`). Não coloque usuário/senha do Rancher no MCP.
+
+```json
+{
+  "mcpServers": {
+    "k8s-rancher": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "native",
+        "KUBECONFIG": "C:\\Users\\SEU-USUARIO\\.kube\\config",
+        "K8S_CONTEXT": "nome-do-contexto",
+        "K8S_NAMESPACE": "saf",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+Se o kubeconfig padrão já aponta para o contexto certo, `KUBECONFIG` e `K8S_CONTEXT` podem ser omitidos.
+
+### 2) Kubernetes Dashboard (`K8S_API_MODE=dashboard`)
+
+O portal **não** é a API do control plane. O MCP traduz para rotas no singular
+(`/api/v1/namespace`, `/api/v1/pod/{ns}`, `/api/v1/log/{ns}/{pod}/{container}`, …).
+
+`K8S_SERVER` = origem do portal **sem** `#/login`. `K8S_TOKEN` = Bearer do login (só no env local).
+
+```json
+{
+  "mcpServers": {
+    "k8s-dashboard": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://seu-dashboard.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+Deixe `K8S_TOKEN` vazio neste exemplo; cole o valor só em `settings.local.json`.
+
+### 3) Auto (`K8S_API_MODE=auto`, padrão)
+
+| Sinal | Backend |
+| --- | --- |
+| host contém `dashboard` | Dashboard |
+| host contém `rancher` ou `/k8s/clusters/` | API nativa |
+| `K8S_SERVER` + `K8S_TOKEN` sem kubeconfig | Dashboard |
+| API nativa devolve `404 page not found` (HTML) | tenta Dashboard |
+| resto | API nativa / kubeconfig |
+
+### Vários clusters no mesmo Gemini
+
+Uma entrada por portal. O token de um Dashboard **não** vale no outro.
+
+```json
+{
+  "mcpServers": {
+    "k8s-dashboard-a": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://dashboard-a.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    },
+    "k8s-dashboard-b": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://dashboard-b.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    },
+    "k8s-rancher": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "native",
+        "K8S_CONTEXT": "local-saf",
+        "K8S_NAMESPACE": "saf",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+### Global tool (mínimo)
 
 ```json
 {
@@ -232,7 +347,7 @@ Dois ambientes (DEV + PROD) = duas entradas no `settings.json`, cada uma com
 | Ferramenta | Parâmetros | O que devolve |
 | --- | --- | --- |
 | `contexto_atual` | — | contexto kube, host, versão do cluster, modo leitura |
-| `diagnosticar_acesso` | `namespace` | probes: /version, namespaces, pods, events, HPA v1/v2, metrics |
+| `diagnosticar_acesso` | `namespace` | nativo: /version, pods, HPA v1/v2, metrics · dashboard: /namespace, /pod, /deployment, /event |
 | `listar_namespaces` | — | namespaces visíveis (nome, status, age) |
 | `listar_deployments` | `namespace`, `labelSelector` | replicas ready/desired, unavailable, age |
 | `listar_replica_sets` | `namespace`, `labelSelector` | ReplicaSets do namespace |
@@ -311,6 +426,8 @@ Exemplos de pedido ao agente:
 | `K8S_TOKEN` | — | Bearer do portal. **Nunca** no pacote nem no git |
 | `K8S_DASHBOARD_TOKEN` | — | Alias de `K8S_TOKEN` |
 | `K8S_SKIP_TLS_VERIFY` | `false` | `true` se o portal usa certificado interno |
+| `K8S_INSECURE_SKIP_TLS_VERIFY` | `false` | Alias de `K8S_SKIP_TLS_VERIFY` |
+| `MCP_K8S_SERVER` / `MCP_K8S_TOKEN` / `MCP_K8S_API_MODE` | — | Aliases das variáveis `K8S_*` equivalentes |
 | `K8S_READONLY` | `true` | Contrato de leitura (não há tools de escrita) |
 | `K8S_MAX_LOG_LINES` | `200` | Teto de `tail` em `logs_pod` |
 | `K8S_MAX_ROWS` | `200` | Teto de linhas em listagens |

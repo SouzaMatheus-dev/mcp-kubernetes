@@ -9,10 +9,10 @@
     <AssemblyName>McpKubernetes</AssemblyName>
 
     <PackageId>McpKubernetes</PackageId>
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <Authors>matneves</Authors>
     <Company>SouzaMatheus-dev</Company>
-    <Description>Servidor MCP especialista em Kubernetes (somente leitura): investigue pods, deployments, events e logs via kubeconfig, sem apply, delete ou exec.</Description>
+    <Description>Servidor MCP especialista em Kubernetes (somente leitura): API nativa/Rancher ou Kubernetes Dashboard. Sem apply, delete ou exec. Credenciais só no ambiente do cliente.</Description>
     <PackageTags>mcp;kubernetes;readonly;gemini;dnx;sre;observability</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/SouzaMatheus-dev/mcp-kubernetes</PackageProjectUrl>

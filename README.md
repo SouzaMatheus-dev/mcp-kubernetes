@@ -14,7 +14,9 @@ Repositório: https://github.com/SouzaMatheus-dev/mcp-kubernetes
 
 ## O que este pacote faz
 
-- Lê o kubeconfig (`~/.kube/config` ou `KUBECONFIG`)
+- Lê o kubeconfig (`~/.kube/config` ou `KUBECONFIG`) — Rancher / API nativa
+- Também fala com **Kubernetes Dashboard** (rotas no singular) quando `K8S_API_MODE=dashboard`
+- **Não embute** token, senha nem URL de cluster: credenciais só no ambiente do cliente
 - Lista namespaces, Deployments, ReplicaSets, Pods, Services, events
 - Obtém o YAML/status de um workload
 - Lê logs com recorte (`tail`, `sinceSeconds`, `previous`)
@@ -40,8 +42,8 @@ O servidor simplesmente não tem como executá-la.
 | Item | Detalhe |
 | --- | --- |
 | .NET | **8+** para global tool · **10+** para `dnx` |
-| Cluster | kubeconfig válido com `get` / `list` / `watch` |
-| Rede | acesso HTTPS à API do Kubernetes |
+| Cluster | **Rancher/API nativa:** kubeconfig com `get` / `list` / `watch` · **Dashboard:** URL do portal + token de leitura no env |
+| Rede | HTTPS até a API nativa **ou** até o Kubernetes Dashboard |
 | Métricas | metrics-server (opcional; só para `uso_recursos_pods`) |
 
 Confira o acesso **antes** de ligar o MCP:
@@ -91,7 +93,7 @@ dotnet dnx McpKubernetes --yes --source https://api.nuget.org/v3/index.json
 ### Versão específica
 
 ```powershell
-dotnet tool install --global McpKubernetes --version 0.1.1
+dotnet tool install --global McpKubernetes --version 0.1.4
 ```
 
 ---
@@ -99,9 +101,124 @@ dotnet tool install --global McpKubernetes --version 0.1.1
 ## Configuração no Gemini CLI
 
 Arquivo do usuário: `%USERPROFILE%\.gemini\settings.json`  
-Ou, no projeto: `.gemini/settings.json`
+Ou, no projeto: `.gemini/settings.json`  
+Credenciais: **somente** em `.gemini/settings.local.json` (gitignored). O pacote não embute token, senha nem URL interna.
 
-### Global tool
+Há **três modos**. Uma entrada MCP por cluster.
+
+### 1) Rancher / API nativa (`K8S_API_MODE=native`)
+
+Usa kubeconfig (o mesmo que o `kubectl`). Não coloque usuário/senha do Rancher no MCP.
+
+```json
+{
+  "mcpServers": {
+    "k8s-rancher": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "native",
+        "KUBECONFIG": "C:\\Users\\SEU-USUARIO\\.kube\\config",
+        "K8S_CONTEXT": "nome-do-contexto",
+        "K8S_NAMESPACE": "saf",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+Se o kubeconfig padrão já aponta para o contexto certo, `KUBECONFIG` e `K8S_CONTEXT` podem ser omitidos.
+
+### 2) Kubernetes Dashboard (`K8S_API_MODE=dashboard`)
+
+O portal **não** é a API do control plane. O MCP traduz para rotas no singular
+(`/api/v1/namespace`, `/api/v1/pod/{ns}`, `/api/v1/log/{ns}/{pod}/{container}`, …).
+
+`K8S_SERVER` = origem do portal **sem** `#/login`. `K8S_TOKEN` = Bearer do login (só no env local).
+
+```json
+{
+  "mcpServers": {
+    "k8s-dashboard": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://seu-dashboard.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+Deixe `K8S_TOKEN` vazio neste exemplo; cole o valor só em `settings.local.json`.
+
+### 3) Auto (`K8S_API_MODE=auto`, padrão)
+
+| Sinal | Backend |
+| --- | --- |
+| host contém `dashboard` | Dashboard |
+| host contém `rancher` ou `/k8s/clusters/` | API nativa |
+| `K8S_SERVER` + `K8S_TOKEN` sem kubeconfig | Dashboard |
+| API nativa devolve `404 page not found` (HTML) | tenta Dashboard |
+| resto | API nativa / kubeconfig |
+
+### Vários clusters no mesmo Gemini
+
+Uma entrada por portal. O token de um Dashboard **não** vale no outro.
+
+```json
+{
+  "mcpServers": {
+    "k8s-dashboard-a": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://dashboard-a.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    },
+    "k8s-dashboard-b": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://dashboard-b.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    },
+    "k8s-rancher": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "native",
+        "K8S_CONTEXT": "local-saf",
+        "K8S_NAMESPACE": "saf",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
+```
+
+### Global tool (mínimo)
 
 ```json
 {
@@ -229,7 +346,8 @@ Dois ambientes (DEV + PROD) = duas entradas no `settings.json`, cada uma com
 
 | Ferramenta | Parâmetros | O que devolve |
 | --- | --- | --- |
-| `contexto_atual` | — | contexto kube, host da API, namespace padrão, modo leitura |
+| `contexto_atual` | — | contexto kube, host, versão do cluster, modo leitura |
+| `diagnosticar_acesso` | `namespace` | nativo: /version, pods, HPA v1/v2, metrics · dashboard: /namespace, /pod, /deployment, /event |
 | `listar_namespaces` | — | namespaces visíveis (nome, status, age) |
 | `listar_deployments` | `namespace`, `labelSelector` | replicas ready/desired, unavailable, age |
 | `listar_replica_sets` | `namespace`, `labelSelector` | ReplicaSets do namespace |
@@ -267,7 +385,8 @@ Kinds aceitos em `obter_recurso` / `listar_recursos`:
 
 Não varra o cluster. Vá do sintoma ao recurso:
 
-1. `contexto_atual` — confirmar **qual** cluster
+1. `contexto_atual` — confirmar **qual** cluster e a versão do servidor
+   Se der 404: rode `diagnosticar_acesso` antes de listar pods
 2. `listar_namespaces` ou use o namespace do mapa/pedido
 3. `listar_deployments` / `listar_pods` **só nesse namespace**
 4. `obter_pod` ou `obter_deployment` do alvo
@@ -298,13 +417,23 @@ Exemplos de pedido ao agente:
 
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
-| `KUBECONFIG` | `~/.kube/config` | Caminho do kubeconfig |
+| `KUBECONFIG` | `~/.kube/config` | Caminho do kubeconfig (Rancher / API nativa) |
 | `MCP_K8S_KUBECONFIG` | — | Alias de `KUBECONFIG` |
 | `K8S_CONTEXT` | contexto atual do kubeconfig | Qual contexto usar |
 | `K8S_NAMESPACE` | — | Namespace padrão (se a tool não receber `namespace`) |
+| `K8S_API_MODE` | `auto` | `auto` · `native` (Rancher/API) · `dashboard` |
+| `K8S_SERVER` | — | URL base do Dashboard (sem `#/login`). Só no env local |
+| `K8S_TOKEN` | — | Bearer do portal. **Nunca** no pacote nem no git |
+| `K8S_DASHBOARD_TOKEN` | — | Alias de `K8S_TOKEN` |
+| `K8S_SKIP_TLS_VERIFY` | `false` | `true` se o portal usa certificado interno |
+| `K8S_INSECURE_SKIP_TLS_VERIFY` | `false` | Alias de `K8S_SKIP_TLS_VERIFY` |
+| `MCP_K8S_SERVER` / `MCP_K8S_TOKEN` / `MCP_K8S_API_MODE` | — | Aliases das variáveis `K8S_*` equivalentes |
 | `K8S_READONLY` | `true` | Contrato de leitura (não há tools de escrita) |
 | `K8S_MAX_LOG_LINES` | `200` | Teto de `tail` em `logs_pod` |
 | `K8S_MAX_ROWS` | `200` | Teto de linhas em listagens |
+
+`auto`: host com `dashboard` → API do portal; host Rancher/`/k8s/clusters/` → API nativa.
+Se a API nativa devolver `404 page not found` (HTML do portal), o MCP tenta o Dashboard.
 
 Se `namespace` não for passado e `K8S_NAMESPACE` estiver vazio, a tool
 responde `Bloqueado: informe namespace` (exceto `listar_namespaces` e
@@ -319,7 +448,8 @@ responde `Bloqueado: informe namespace` (exceto `listar_namespaces` e
 - Permissões reais vêm do **RBAC** do cluster
 - Prefira ServiceAccount só com `get`, `list`, `watch` e `pods/log`
 - `trust: false` no cliente MCP: confirme tools inesperadas
-- Não coloque tokens de cluster no git; use `KUBECONFIG` local
+- Não coloque tokens, senhas nem URLs internas no git nem neste pacote
+- Token do Dashboard / kubeconfig ficam só em `settings.local.json` (gitignored) ou no ambiente da máquina
 
 Manifesto de exemplo (Role somente leitura):
 https://github.com/SouzaMatheus-dev/mcp-kubernetes
@@ -332,7 +462,11 @@ https://github.com/SouzaMatheus-dev/mcp-kubernetes
 | --- | --- | --- |
 | `/mcp list` sem `kubernetes` | tool não no PATH | Reabra o terminal; `dotnet tool install --global McpKubernetes` |
 | `Forbidden` | RBAC sem get/list | Peça Role de leitura; o MCP não contorna |
-| `Não encontrado` | namespace/nome errados | `listar_namespaces` + `listar_pods` |
+| `Não encontrado` (404) | API antiga, namespace errado ou kubeconfig/Rancher | `diagnosticar_acesso`; veja a `url=` no erro |
+| 404 em HPA | cluster sem `autoscaling/v2` | o MCP cai para `autoscaling/v1` sozinho |
+| 404 em metrics | sem metrics-server | ignore `uso_recursos_pods` |
+| 404 em `/version` ou em tudo | kubeconfig/Rancher (cluster id) errado **ou** URL de Dashboard na API nativa | `K8S_API_MODE=dashboard` + `K8S_SERVER`/`K8S_TOKEN` |
+| Dashboard 401 | token do portal expirado | renove no login do Dashboard; atualize o env local |
 | `Bloqueado: informe namespace` | sem `namespace` e sem `K8S_NAMESPACE` | Passe o namespace na tool ou no `env` |
 | log vazio | pod novo ou container errado | `obter_pod`; tente `previous=true` |
 | `uso_recursos_pods` falha | sem metrics-server | Siga sem CPU/mem; não é bloqueante |
