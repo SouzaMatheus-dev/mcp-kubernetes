@@ -22,6 +22,20 @@ public sealed class KubernetesReader
 
     public KubernetesClientConfiguration KubeConfig => _kubeConfig.Value;
 
+    public bool TryGetKubeConfig(out KubernetesClientConfiguration? configuration)
+    {
+        try
+        {
+            configuration = _kubeConfig.Value;
+            return true;
+        }
+        catch
+        {
+            configuration = null;
+            return false;
+        }
+    }
+
     public string ResolveNamespace(string? requested)
     {
         var ns = _config.ResolveNamespace(requested);
@@ -30,7 +44,12 @@ public sealed class KubernetesReader
             return ns;
         }
 
-        return KubeConfig.Namespace ?? "default";
+        if (TryGetKubeConfig(out var cfg) && !string.IsNullOrWhiteSpace(cfg?.Namespace))
+        {
+            return cfg.Namespace;
+        }
+
+        return "default";
     }
 
     public string DescribeContext()
@@ -263,6 +282,7 @@ public sealed class KubernetesReader
         yield return $"namespace_padrao={cfg.Namespace ?? _config.DefaultNamespace}";
         yield return $"usuario={DescribeUser(cfg)}";
         yield return $"modo=somente_leitura";
+        yield return $"api={_config.ApiMode.ToString().ToLowerInvariant()}";
         yield return $"kubeconfig={_config.Kubeconfig ?? "(padrao ~/.kube/config)"}";
     }
 
@@ -347,20 +367,29 @@ public sealed class KubernetesReader
         var kubeconfig = _config.Kubeconfig;
         var context = _config.Context;
 
+        KubernetesClientConfiguration loaded;
         if (!string.IsNullOrWhiteSpace(kubeconfig))
         {
-            return KubernetesClientConfiguration.BuildConfigFromConfigFile(
+            loaded = KubernetesClientConfiguration.BuildConfigFromConfigFile(
                 kubeconfig: new FileInfo(kubeconfig),
                 currentContext: string.IsNullOrWhiteSpace(context) ? null : context);
         }
-
-        if (!string.IsNullOrWhiteSpace(context))
+        else if (!string.IsNullOrWhiteSpace(context))
         {
-            return KubernetesClientConfiguration.BuildConfigFromConfigFile(
+            loaded = KubernetesClientConfiguration.BuildConfigFromConfigFile(
                 currentContext: context);
         }
+        else
+        {
+            loaded = KubernetesClientConfiguration.BuildDefaultConfig();
+        }
 
-        return KubernetesClientConfiguration.BuildDefaultConfig();
+        if (_config.SkipTlsVerify)
+        {
+            loaded.SkipTlsVerify = true;
+        }
+
+        return loaded;
     }
 
     private static string RedactSecret(object resource)

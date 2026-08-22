@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using McpKubernetes.Services;
+using McpKubernetes.Services.Dashboard;
 using McpKubernetes.Tools;
 
 var builder = Host.CreateEmptyApplicationBuilder(settings: null);
@@ -13,6 +14,9 @@ builder.Logging.AddConsole(options =>
 
 builder.Services.AddSingleton<McpConfig>();
 builder.Services.AddSingleton<KubernetesReader>();
+builder.Services.AddSingleton<NativeClusterOps>();
+builder.Services.AddSingleton<DashboardClusterOps>();
+builder.Services.AddSingleton<IClusterOps, ClusterOpsRouter>();
 builder.Services.AddSingleton<KubernetesTools>();
 builder.Services
     .AddMcpServer(options =>

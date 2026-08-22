@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "kubernetes-dashboard": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_API_MODE": "dashboard",
+        "K8S_SERVER": "https://seu-dashboard.exemplo.interno",
+        "K8S_TOKEN": "",
+        "K8S_NAMESPACE": "saf",
+        "K8S_SKIP_TLS_VERIFY": "true",
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}
