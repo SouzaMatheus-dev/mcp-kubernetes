@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "mcp-kubernetes",
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_READONLY": "true",
+        "K8S_NAMESPACE": "saf-prod"
+      }
+    }
+  }
+}

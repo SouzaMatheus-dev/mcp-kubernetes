@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "dotnet",
+      "args": [
+        "dnx",
+        "McpKubernetes",
+        "--yes",
+        "--source",
+        "https://api.nuget.org/v3/index.json"
+      ],
+      "timeout": 120000,
+      "trust": false,
+      "env": {
+        "K8S_READONLY": "true"
+      }
+    }
+  }
+}

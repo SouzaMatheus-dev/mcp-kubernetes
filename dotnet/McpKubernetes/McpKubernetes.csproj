@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>McpKubernetes</RootNamespace>
+    <AssemblyName>McpKubernetes</AssemblyName>
+
+    <PackageId>McpKubernetes</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>matneves</Authors>
+    <Company>SouzaMatheus-dev</Company>
+    <Description>Servidor MCP especialista em Kubernetes: investigação somente leitura de workloads, pods, events e logs via kubeconfig.</Description>
+    <PackageTags>mcp;kubernetes;readonly;gemini;dnx;sre;observability</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/SouzaMatheus-dev/mcp-kubernetes</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SouzaMatheus-dev/mcp-kubernetes</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>mcp-kubernetes</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KubernetesClient" Version="17.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
+  </ItemGroup>
+
+</Project>
