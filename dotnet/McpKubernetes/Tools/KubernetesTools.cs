@@ -9,8 +9,12 @@ namespace McpKubernetes.Tools;
 [McpServerToolType]
 public sealed class KubernetesTools(McpConfig config, KubernetesReader reader)
 {
-    [McpServerTool, Description("Mostra o contexto kube atual, host da API e modo somente leitura.")]
-    public string ContextoAtual() => reader.DescribeContext();
+    [McpServerTool, Description("Mostra o contexto kube atual, host da API, versão do Kubernetes e modo somente leitura.")]
+    public Task<string> ContextoAtual() => reader.SafeAsync(reader.DescribeContextAsync);
+
+    [McpServerTool, Description("Diagnostica acesso ao cluster: versão, host (Rancher/API), e quais APIs respondem (pods, events, HPA v1/v2, metrics). Use quando as outras tools derem 404.")]
+    public Task<string> DiagnosticarAcesso(string @namespace = "") =>
+        reader.SafeAsync(() => reader.DiagnoseAsync(@namespace));
 
     [McpServerTool, Description("Lista namespaces visíveis para o kubeconfig conectado.")]
     public Task<string> ListarNamespaces() =>
@@ -240,10 +244,8 @@ public sealed class KubernetesTools(McpConfig config, KubernetesReader reader)
                         await reader.Client.CoreV1.ListNamespacedConfigMapAsync(
                             ns,
                             labelSelector: EmptyToNull(labelSelector)).ConfigureAwait(false)),
-                    "hpa" or "horizontalpodautoscaler" or "horizontalpodautoscalers" => FormatHpas(
-                        await reader.Client.AutoscalingV2.ListNamespacedHorizontalPodAutoscalerAsync(
-                            ns,
-                            labelSelector: EmptyToNull(labelSelector)).ConfigureAwait(false)),
+                    "hpa" or "horizontalpodautoscaler" or "horizontalpodautoscalers" =>
+                        await ListHpasAsync(ns, labelSelector).ConfigureAwait(false),
                     "statefulset" or "statefulsets" => FormatStatefulSets(
                         await reader.Client.AppsV1.ListNamespacedStatefulSetAsync(
                             ns,
@@ -321,7 +323,9 @@ public sealed class KubernetesTools(McpConfig config, KubernetesReader reader)
                 "service" or "services" => await reader.Client.CoreV1.ReadNamespacedServiceAsync(name, ns).ConfigureAwait(false),
                 "configmap" or "configmaps" => await reader.Client.CoreV1.ReadNamespacedConfigMapAsync(name, ns).ConfigureAwait(false),
                 "namespace" or "namespaces" => await reader.Client.CoreV1.ReadNamespaceAsync(name).ConfigureAwait(false),
-                "hpa" or "horizontalpodautoscaler" => await reader.Client.AutoscalingV2.ReadNamespacedHorizontalPodAutoscalerAsync(name, ns).ConfigureAwait(false),
+                "hpa" or "horizontalpodautoscaler" => await reader.TryOrFallbackAsync<object>(
+                    async () => await reader.Client.AutoscalingV2.ReadNamespacedHorizontalPodAutoscalerAsync(name, ns).ConfigureAwait(false),
+                    async () => await reader.Client.AutoscalingV1.ReadNamespacedHorizontalPodAutoscalerAsync(name, ns).ConfigureAwait(false)).ConfigureAwait(false),
                 "statefulset" or "statefulsets" => await reader.Client.AppsV1.ReadNamespacedStatefulSetAsync(name, ns).ConfigureAwait(false),
                 "daemonset" or "daemonsets" => await reader.Client.AppsV1.ReadNamespacedDaemonSetAsync(name, ns).ConfigureAwait(false),
                 "job" or "jobs" => await reader.Client.BatchV1.ReadNamespacedJobAsync(name, ns).ConfigureAwait(false),
@@ -363,7 +367,29 @@ public sealed class KubernetesTools(McpConfig config, KubernetesReader reader)
                 KubernetesReader.Age(cm.CreationTimestamp()),
             ]));
 
+    private async Task<string> ListHpasAsync(string ns, string labelSelector)
+    {
+        var selector = EmptyToNull(labelSelector);
+        return await reader.TryOrFallbackAsync(
+            async () => FormatHpas(await reader.Client.AutoscalingV2
+                .ListNamespacedHorizontalPodAutoscalerAsync(ns, labelSelector: selector).ConfigureAwait(false)),
+            async () => FormatHpasV1(await reader.Client.AutoscalingV1
+                .ListNamespacedHorizontalPodAutoscalerAsync(ns, labelSelector: selector).ConfigureAwait(false))).ConfigureAwait(false);
+    }
+
     private static string FormatHpas(V2HorizontalPodAutoscalerList list) =>
+        KubernetesReader.Table(
+            ["NAME", "MIN", "MAX", "CURRENT", "AGE"],
+            list.Items.Select(hpa => (IReadOnlyList<string>)
+            [
+                hpa.Name(),
+                (hpa.Spec?.MinReplicas ?? 0).ToString(),
+                (hpa.Spec?.MaxReplicas ?? 0).ToString(),
+                (hpa.Status?.CurrentReplicas ?? 0).ToString(),
+                KubernetesReader.Age(hpa.CreationTimestamp()),
+            ]));
+
+    private static string FormatHpasV1(V1HorizontalPodAutoscalerList list) =>
         KubernetesReader.Table(
             ["NAME", "MIN", "MAX", "CURRENT", "AGE"],
             list.Items.Select(hpa => (IReadOnlyList<string>)

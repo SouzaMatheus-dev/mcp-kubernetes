@@ -91,7 +91,7 @@ dotnet dnx McpKubernetes --yes --source https://api.nuget.org/v3/index.json
 ### Versão específica
 
 ```powershell
-dotnet tool install --global McpKubernetes --version 0.1.1
+dotnet tool install --global McpKubernetes --version 0.1.2
 ```
 
 ---
@@ -229,7 +229,8 @@ Dois ambientes (DEV + PROD) = duas entradas no `settings.json`, cada uma com
 
 | Ferramenta | Parâmetros | O que devolve |
 | --- | --- | --- |
-| `contexto_atual` | — | contexto kube, host da API, namespace padrão, modo leitura |
+| `contexto_atual` | — | contexto kube, host, versão do cluster, modo leitura |
+| `diagnosticar_acesso` | `namespace` | probes: /version, namespaces, pods, events, HPA v1/v2, metrics |
 | `listar_namespaces` | — | namespaces visíveis (nome, status, age) |
 | `listar_deployments` | `namespace`, `labelSelector` | replicas ready/desired, unavailable, age |
 | `listar_replica_sets` | `namespace`, `labelSelector` | ReplicaSets do namespace |
@@ -267,7 +268,8 @@ Kinds aceitos em `obter_recurso` / `listar_recursos`:
 
 Não varra o cluster. Vá do sintoma ao recurso:
 
-1. `contexto_atual` — confirmar **qual** cluster
+1. `contexto_atual` — confirmar **qual** cluster e a versão do servidor
+   Se der 404: rode `diagnosticar_acesso` antes de listar pods
 2. `listar_namespaces` ou use o namespace do mapa/pedido
 3. `listar_deployments` / `listar_pods` **só nesse namespace**
 4. `obter_pod` ou `obter_deployment` do alvo
@@ -332,7 +334,10 @@ https://github.com/SouzaMatheus-dev/mcp-kubernetes
 | --- | --- | --- |
 | `/mcp list` sem `kubernetes` | tool não no PATH | Reabra o terminal; `dotnet tool install --global McpKubernetes` |
 | `Forbidden` | RBAC sem get/list | Peça Role de leitura; o MCP não contorna |
-| `Não encontrado` | namespace/nome errados | `listar_namespaces` + `listar_pods` |
+| `Não encontrado` (404) | API antiga, namespace errado ou kubeconfig/Rancher | `diagnosticar_acesso`; veja a `url=` no erro |
+| 404 em HPA | cluster sem `autoscaling/v2` | o MCP cai para `autoscaling/v1` sozinho |
+| 404 em metrics | sem metrics-server | ignore `uso_recursos_pods` |
+| 404 em `/version` ou em tudo | kubeconfig/Rancher (cluster id) errado | baixe de novo o YAML **desse** cluster no portal |
 | `Bloqueado: informe namespace` | sem `namespace` e sem `K8S_NAMESPACE` | Passe o namespace na tool ou no `env` |
 | log vazio | pod novo ou container errado | `obter_pod`; tente `previous=true` |
 | `uso_recursos_pods` falha | sem metrics-server | Siga sem CPU/mem; não é bloqueante |
