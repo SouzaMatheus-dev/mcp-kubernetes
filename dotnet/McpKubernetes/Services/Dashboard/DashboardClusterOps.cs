@@ -104,13 +104,29 @@ public sealed class DashboardClusterOps : IClusterOps, IDisposable
             }
         }
 
-        var url =
-            $"api/v1/log/{Uri.EscapeDataString(@namespace)}/{Uri.EscapeDataString(name)}/{Uri.EscapeDataString(containerName)}" +
-            $"?previous={previous.ToString().ToLowerInvariant()}&referenceTimestamp=newest&offsetFrom={Math.Max(0, 2000000000 - tail)}&offsetTo=2000000000";
+        // Contrato do Kubernetes Dashboard (UI oficial):
+        // GET /api/v1/log/{ns}/{pod}/{container}
+        //   ?previous=&referenceTimestamp=newest&referenceLineNum=0
+        //   &logFilePosition=end&offsetFrom=2000000000&offsetTo=2000000000+tail
+        // Resposta: { info, selection, logs: [ { timestamp, content } ] }
+        // sinceSeconds não existe no portal — só na API nativa.
         _ = sinceSeconds;
+        var previousFlag = previous.ToString().ToLowerInvariant();
+        var path =
+            $"api/v1/log/{Uri.EscapeDataString(@namespace)}/{Uri.EscapeDataString(name)}/{Uri.EscapeDataString(containerName)}";
+        var official =
+            $"{path}?previous={previousFlag}&referenceTimestamp=newest&referenceLineNum=0" +
+            $"&logFilePosition=end&offsetFrom=2000000000&offsetTo={2000000000 + tail}";
+        var simple = $"{path}?previous={previousFlag}";
 
-        var raw = await _client.Value.GetRawAsync(url).ConfigureAwait(false);
-        return ExtractLogs(raw);
+        try
+        {
+            return DashboardJson.ExtractLogs(await _client.Value.GetRawAsync(official).ConfigureAwait(false));
+        }
+        catch (HttpRequestException)
+        {
+            return DashboardJson.ExtractLogs(await _client.Value.GetRawAsync(simple).ConfigureAwait(false));
+        }
     }
 
     public async Task<string> ListEventsAsync(string @namespace, string? involvedObject)
@@ -359,33 +375,6 @@ public sealed class DashboardClusterOps : IClusterOps, IDisposable
         }
 
         return "-";
-    }
-
-    private static string ExtractLogs(string raw)
-    {
-        try
-        {
-            var root = DashboardJson.Parse(raw);
-            if (DashboardJson.TryGet(root, "logs", out var logs))
-            {
-                if (logs.ValueKind == JsonValueKind.String)
-                {
-                    return string.IsNullOrWhiteSpace(logs.GetString()) ? "(log vazio)" : logs.GetString()!.TrimEnd();
-                }
-
-                if (logs.ValueKind == JsonValueKind.Array)
-                {
-                    var text = string.Join(Environment.NewLine, logs.EnumerateArray().Select(l => l.GetString()).Where(s => s is not null));
-                    return string.IsNullOrWhiteSpace(text) ? "(log vazio)" : text;
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // corpo em texto puro
-        }
-
-        return string.IsNullOrWhiteSpace(raw) ? "(log vazio)" : raw.TrimEnd();
     }
 
     private async Task<string> ProbeAsync(string label, Func<Task<JsonElement>> action)

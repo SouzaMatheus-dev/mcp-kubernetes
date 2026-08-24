@@ -9,7 +9,7 @@
     <AssemblyName>McpKubernetes</AssemblyName>
 
     <PackageId>McpKubernetes</PackageId>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <Authors>matneves</Authors>
     <Company>SouzaMatheus-dev</Company>
     <Description>Servidor MCP especialista em Kubernetes (somente leitura): API nativa/Rancher ou Kubernetes Dashboard. Sem apply, delete ou exec. Credenciais só no ambiente do cliente.</Description>

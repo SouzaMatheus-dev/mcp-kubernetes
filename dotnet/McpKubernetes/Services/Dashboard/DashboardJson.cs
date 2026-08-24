@@ -172,21 +172,107 @@ internal static class DashboardJson
 
     internal static string FirstContainer(JsonElement pod)
     {
-        foreach (var key in new[] { "containers", "containerStatuses" })
+        foreach (var path in new[]
         {
-            if (TryGet(pod, key, out var arr) && arr.ValueKind == JsonValueKind.Array)
+            new[] { "containers" },
+            new[] { "containerStatuses" },
+            new[] { "podStatus", "containerStatuses" },
+            new[] { "initContainers" },
+        })
+        {
+            var current = pod;
+            var ok = true;
+            foreach (var segment in path)
             {
-                foreach (var item in arr.EnumerateArray())
+                if (!TryGet(current, segment, out current))
                 {
-                    var name = FirstText(item, ["name"], ["containerName"]);
-                    if (name != "-")
-                    {
-                        return name;
-                    }
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (!ok || current.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var item in current.EnumerateArray())
+            {
+                var name = FirstText(item, ["name"], ["containerName"]);
+                if (name != "-")
+                {
+                    return name;
                 }
             }
         }
 
         return "-";
+    }
+
+    internal static string ExtractLogs(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "(log vazio)";
+        }
+
+        try
+        {
+            var root = Parse(raw);
+            var kind = FirstText(root, ["kind"]);
+            var status = FirstText(root, ["status"]);
+            if (kind.Equals("Status", StringComparison.OrdinalIgnoreCase) ||
+                status.Equals("Failure", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Dashboard/API recusou o log: {FirstText(root, ["message"], ["reason"])}";
+            }
+
+            if (TryGet(root, "logs", out var logs))
+            {
+                var text = FlattenLogs(logs);
+                return string.IsNullOrWhiteSpace(text) ? "(log vazio)" : text;
+            }
+        }
+        catch (Exception)
+        {
+            // texto puro ou JSON inesperado — devolve o corpo sem estourar
+        }
+
+        return raw.TrimStart().StartsWith('{')
+            ? "(log vazio: o portal devolveu JSON sem campo logs[].content)"
+            : raw.TrimEnd();
+    }
+
+    private static string FlattenLogs(JsonElement logs) =>
+        logs.ValueKind switch
+        {
+            JsonValueKind.String => SafeString(logs),
+            JsonValueKind.Object => LineContent(logs),
+            JsonValueKind.Array => string.Join(
+                Environment.NewLine,
+                logs.EnumerateArray()
+                    .Select(LineContent)
+                    .Where(s => !string.IsNullOrWhiteSpace(s) && s != "-")),
+            _ => "",
+        };
+
+    private static string LineContent(JsonElement line) =>
+        line.ValueKind switch
+        {
+            JsonValueKind.String => SafeString(line),
+            JsonValueKind.Object => FirstText(line, ["content"], ["log"], ["message"], ["text"]),
+            _ => line.ToString(),
+        };
+
+    private static string SafeString(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            return element.ValueKind == JsonValueKind.Object
+                ? FirstText(element, ["content"], ["message"])
+                : element.ToString();
+        }
+
+        return element.GetString() ?? "";
     }
 }

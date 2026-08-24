@@ -159,6 +159,12 @@ public sealed class KubernetesReader
         {
             return FormatHttpError(ex);
         }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("element of type 'String'", StringComparison.OrdinalIgnoreCase))
+        {
+            return "O Dashboard devolveu JSON de log ({ logs: [{ content }] }) e o cliente tentou ler como texto puro. " +
+                   "Atualize o McpKubernetes para 0.1.5+ (dotnet tool update --global McpKubernetes) e rode /mcp reload.";
+        }
         catch (Exception ex)
         {
             return $"Erro ao consultar o cluster: {ex.Message}";

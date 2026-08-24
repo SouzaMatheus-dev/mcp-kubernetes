@@ -65,7 +65,18 @@ public sealed class NativeClusterOps(McpConfig config, KubernetesReader reader) 
 
         using var readerStream = new StreamReader(stream);
         var text = await readerStream.ReadToEndAsync().ConfigureAwait(false);
-        return string.IsNullOrWhiteSpace(text) ? "(log vazio)" : text.TrimEnd();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "(log vazio)";
+        }
+
+        var trimmed = text.TrimStart();
+        if (trimmed.StartsWith('{'))
+        {
+            return Dashboard.DashboardJson.ExtractLogs(text);
+        }
+
+        return text.TrimEnd();
     }
 
     public async Task<string> ListEventsAsync(string @namespace, string? involvedObject)

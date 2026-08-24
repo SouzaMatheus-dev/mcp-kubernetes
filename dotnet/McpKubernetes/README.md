@@ -93,7 +93,7 @@ dotnet dnx McpKubernetes --yes --source https://api.nuget.org/v3/index.json
 ### Versão específica
 
 ```powershell
-dotnet tool install --global McpKubernetes --version 0.1.4
+dotnet tool install --global McpKubernetes --version 0.1.5
 ```
 
 ---
@@ -159,6 +159,22 @@ O portal **não** é a API do control plane. O MCP traduz para rotas no singular
 ```
 
 Deixe `K8S_TOKEN` vazio neste exemplo; cole o valor só em `settings.local.json`.
+
+A tool do Gemini é a **mesma** em todos os clusters (`logs_pod`, `listar_pods`, …).
+O HTTP por baixo muda:
+
+| Recurso | API nativa / Rancher | Kubernetes Dashboard |
+| --- | --- | --- |
+| Namespaces | `/api/v1/namespaces` | `/api/v1/namespace` |
+| Pods | `/api/v1/namespaces/{ns}/pods` | `/api/v1/pod/{ns}?itemsPerPage=` |
+| Deployments | `/apis/apps/v1/namespaces/{ns}/deployments` | `/api/v1/deployment/{ns}` |
+| ReplicaSets | `/apis/apps/v1/namespaces/{ns}/replicasets` | `/api/v1/replicaset/{ns}` |
+| Services | `/api/v1/namespaces/{ns}/services` | `/api/v1/service/{ns}` |
+| Events | `/api/v1/namespaces/{ns}/events` | `/api/v1/event/{ns}` |
+| Logs | `/api/v1/namespaces/{ns}/pods/{pod}/log` | `/api/v1/log/{ns}/{pod}/{container}` |
+
+**Logs:** no Rancher o SDK manda `tailLines` + `sinceSeconds` + `previous`.
+No Dashboard o portal exige o **nome do container**; se a tool não receber, o MCP lê o pod e pega o primeiro. A resposta oficial é `{ logs: [ { timestamp, content } ] }` — o MCP junta só o `content`. `sinceSeconds` **não existe** no portal (só `previous` + janela por `offset`).
 
 ### 3) Auto (`K8S_API_MODE=auto`, padrão)
 
@@ -374,7 +390,7 @@ Kinds aceitos em `obter_recurso` / `listar_recursos`:
 | Ferramenta | Parâmetros | O que devolve |
 | --- | --- | --- |
 | `listar_eventos` | `namespace`, `involvedObject` | type, reason, kind, objeto, message |
-| `logs_pod` | `name`, `namespace`, `container`, `tail` (1–200), `sinceSeconds`, `previous` | texto do log |
+| `logs_pod` | `name`, `namespace`, `container`, `tail` (1–200), `sinceSeconds` (só nativo), `previous` | texto do log (Dashboard: `logs[].content`) |
 | `uso_recursos_pods` | `namespace`, `name` | CPU/memória por container (metrics-server) |
 
 `previous=true` lê o container que acabou de morrer — use em CrashLoop/OOM.
@@ -469,6 +485,7 @@ https://github.com/SouzaMatheus-dev/mcp-kubernetes
 | Dashboard 401 | token do portal expirado | renove no login do Dashboard; atualize o env local |
 | `Bloqueado: informe namespace` | sem `namespace` e sem `K8S_NAMESPACE` | Passe o namespace na tool ou no `env` |
 | log vazio | pod novo ou container errado | `obter_pod`; tente `previous=true` |
+| `element of type 'String' ... type 'Object'` | MCP &lt; 0.1.5 no Dashboard (k8s1/k8s3) | `dotnet tool update --global McpKubernetes` → 0.1.5+ e `/mcp reload` |
 | `uso_recursos_pods` falha | sem metrics-server | Siga sem CPU/mem; não é bloqueante |
 | contexto errado | vários clusters no kubeconfig | defina `K8S_CONTEXT` ou `KUBECONFIG` |
 
