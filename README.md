@@ -1,5 +1,18 @@
 # McpKubernetes
 
+[![NuGet](https://img.shields.io/nuget/v/McpKubernetes?logo=nuget&logoColor=white&label=NuGet&color=004880)](https://www.nuget.org/packages/McpKubernetes)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/8.0)
+[![C#](https://img.shields.io/badge/C%23-12-239120?logo=csharp&logoColor=white)](https://learn.microsoft.com/dotnet/csharp/)
+[![MCP](https://img.shields.io/badge/MCP-1.4-111111)](https://modelcontextprotocol.io)
+[![License](https://img.shields.io/github/license/SouzaMatheus-dev/mcp-kubernetes?color=blue)](https://github.com/SouzaMatheus-dev/mcp-kubernetes/blob/main/LICENSE)
+
+![Kubernetes](https://img.shields.io/badge/Kubernetes-leitura-326CE5?logo=kubernetes&logoColor=white)
+![Rancher](https://img.shields.io/badge/API-Rancher%20%2F%20nativa-2456A5)
+![Dashboard](https://img.shields.io/badge/Dashboard-leitura-1d4ed8)
+![Logs](https://img.shields.io/badge/Logs-leitura-0f766e)
+![Métricas](https://img.shields.io/badge/M%C3%A9tricas-leitura-0369a1)
+![kubeconfig](https://img.shields.io/badge/credencial-kubeconfig-0078D4)
+
 Servidor **MCP especialista em Kubernetes**, **somente leitura**.
 
 Conecte **Gemini CLI**, **VS Code**, **Claude Desktop** ou qualquer cliente MCP
